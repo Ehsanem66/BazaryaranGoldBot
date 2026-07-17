@@ -1,40 +1,7 @@
-import requests
-
 def get_gold_price_18k():
-    """دریافت قیمت لحظه‌ای طلا ۱۸ عیار"""
-    try:
-        # API جایگزین سازگار با PythonAnywhere
-        response = requests.get(
-            'https://bonbast.com/graph/18k/latest',
-            headers={'User-Agent': 'Mozilla/5.0'}
-        )
-        
-        if response.status_code == 200:
-            data = response.json()
-            if 'price' in data:
-                return float(data['price'])
-    except:
-        pass
-    
-    try:
-        # API دوم
-        response = requests.get(
-            'https://api.exchangerate.host/latest?base=USD&symbols=IRR'
-        )
-        
-        if response.status_code == 200:
-            data = response.json()
-            usd_to_irr = data['rates']['IRR']
-            gold_per_gram = (2500 * usd_to_irr) / 31.1035
-            return gold_per_gram
-    except:
-        pass
-    
-    # قیمت پیش‌فرض
-    return 3_500_000
+    return 5_000_000
 
 def calculate_price(weight, purity, profit_percent, labor_percent, is_new):
-    """محاسبه قیمت نهایی طلا"""
     base_price_18k = get_gold_price_18k()
     
     purity_factors = {
