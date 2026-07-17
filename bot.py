@@ -154,11 +154,24 @@ async def condition_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("❌ فروخته شد", callback_data=f"sold_{ad_id}")]
     ]
     
+    # ارسال به کاربر
     await query.message.reply_photo(
         photo=user_data['photo_id'],
         caption=ad_text,
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
+    
+    # ارسال همزمان به کانال
+    try:
+        channel_text = ad_text + "\n\n📱 جهت ثبت آگهی: @BazaryaranBot"
+        await context.bot.send_photo(
+            chat_id=CHANNEL_ID,
+            photo=user_data['photo_id'],
+            caption=channel_text,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+    except Exception as e:
+        print(f"Channel error: {e}")
     
     del user_data_temp[user_id]
     return ConversationHandler.END
