@@ -163,10 +163,13 @@ async def phone_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+
+    if query.data.startswith("condition_"):
+    return
     
-    data = query.data.split('_')
-    action = data[0]
-    ad_id = '_'.join(data[1:])
+    data = query.data.split('_', 1)
+    action = data[0] if '_' in query.data else query.data
+    ad_id = data[1] if '_' in query.data else query.data
     
     if action == "price":
         ad_data = db.get_ad(ad_id)
@@ -262,7 +265,7 @@ def main():
     )
     
     application.add_handler(conv_handler)
-    application.add_handler(CallbackQueryHandler(button_handler, pattern='^(price|update|sold)_'))
+    application.add_handler(CallbackQueryHandler(button_handler, pattern='^[0-9]'))
     
     print("🌟 Bazaryaran GoldBot is running...")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
