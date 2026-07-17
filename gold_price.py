@@ -1,7 +1,7 @@
 import requests
 
 # آیدی عددی ادمین
-ADMIN_ID = 123456789
+ADMIN_ID = 106546961
 
 async def send_alert_to_admin(context, message):
     try:
