@@ -18,12 +18,11 @@ class Handler(BaseHTTPRequestHandler):
 
 def run_health_server():
     port = int(os.environ.get('PORT', 10000))
-    print(f"🔌 Health server starting on port {port}...")
+    print(f"Health server on port {port}")
     server = HTTPServer(('0.0.0.0', port), Handler)
-    print(f"✅ Health server running on port {port}")
     server.serve_forever()
 
-# مراحل مکالمه
+# مراحل
 (PHOTO, NAME, PURITY, WEIGHT, PROFIT_PERCENT, 
  LABOR_PERCENT, CONDITION, PHONE) = range(8)
 
@@ -33,26 +32,18 @@ user_data_temp = {}
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user_data_temp[user_id] = {}
-    
-    welcome_text = (
-        "🌟 به ربات طلافروشی بازاریاران خوش آمدید!\n\n"
-        "📸 لطفاً عکس طلای خود را ارسال کنید:"
-    )
-    
-    await update.message.reply_text(welcome_text)
+    await update.message.reply_text("🌟 به ربات طلافروشی بازاریاران خوش آمدید!\n\n📸 لطفاً عکس طلای خود را ارسال کنید:")
     return PHOTO
 
 async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user_data_temp[user_id]['photo_id'] = update.message.photo[-1].file_id
-    
     await update.message.reply_text("📝 نام طلا را وارد کنید (مثلاً: گردنبند قلب):")
     return NAME
 
 async def name_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user_data_temp[user_id]['name'] = update.message.text
-    
     keyboard = [
         [InlineKeyboardButton("۱۴ عیار", callback_data="purity_14"),
          InlineKeyboardButton("۱۸ عیار", callback_data="purity_18")],
@@ -60,19 +51,15 @@ async def name_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
          InlineKeyboardButton("۲۲ عیار", callback_data="purity_22")],
         [InlineKeyboardButton("۲۴ عیار", callback_data="purity_24")]
     ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    await update.message.reply_text("📊 عیار طلا را انتخاب کنید:", reply_markup=reply_markup)
+    await update.message.reply_text("📊 عیار طلا را انتخاب کنید:", reply_markup=InlineKeyboardMarkup(keyboard))
     return PURITY
 
 async def purity_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    
     user_id = update.effective_user.id
     purity = int(query.data.split('_')[1])
     user_data_temp[user_id]['purity'] = purity
-    
     await query.edit_message_text(f"✅ عیار انتخابی: {purity}\n\n⚖ وزن طلا را به گرم وارد کنید (مثلاً: 5.2):")
     return WEIGHT
 
@@ -83,7 +70,6 @@ async def weight_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if weight <= 0:
             raise ValueError
         user_data_temp[user_id]['weight'] = weight
-        
         await update.message.reply_text("📈 درصد سود فروشنده را وارد کنید (فقط عدد، مثلاً: 15):")
         return PROFIT_PERCENT
     except ValueError:
@@ -97,7 +83,6 @@ async def profit_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if profit < 0:
             raise ValueError
         user_data_temp[user_id]['profit_percent'] = profit
-        
         await update.message.reply_text("🔧 درصد اجرت ساخت را وارد کنید (فقط عدد، مثلاً: 10):")
         return LABOR_PERCENT
     except ValueError:
@@ -111,14 +96,11 @@ async def labor_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if labor < 0:
             raise ValueError
         user_data_temp[user_id]['labor_percent'] = labor
-        
         keyboard = [
             [InlineKeyboardButton("نو ✨", callback_data="condition_new"),
              InlineKeyboardButton("دست دوم 🔄", callback_data="condition_used")]
         ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await update.message.reply_text("📦 وضعیت طلا:", reply_markup=reply_markup)
+        await update.message.reply_text("📦 وضعیت طلا:", reply_markup=InlineKeyboardMarkup(keyboard))
         return CONDITION
     except ValueError:
         await update.message.reply_text("❌ لطفاً یک عدد معتبر وارد کنید:")
@@ -129,17 +111,14 @@ async def condition_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     user_id = update.effective_user.id
-    is_new = query.data.split('_')[1] == 'new'
+    is_new = query.data == "condition_new"
     user_data_temp[user_id]['is_new'] = is_new
-    
     condition_text = "نو ✨" if is_new else "دست دوم 🔄"
     
-    # شماره ثابت
     phone = "09127136697"
     user_data_temp[user_id]['phone'] = phone
     user_data = user_data_temp[user_id]
     
-    # ذخیره اطلاعات اولیه (بدون محاسبه قیمت)
     ad_id = f"{user_id}_{datetime.now().timestamp()}"
     ad_data = {
         'user_id': user_id,
@@ -169,12 +148,11 @@ async def condition_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("📱 تماس با فروشنده", url=f"tel:{phone}")],
         [InlineKeyboardButton("❌ فروخته شد", callback_data=f"sold_{ad_id}")]
     ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
     
     await query.message.reply_photo(
         photo=user_data['photo_id'],
         caption=ad_text,
-        reply_markup=reply_markup
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
     
     del user_data_temp[user_id]
@@ -185,7 +163,6 @@ async def phone_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
     
     data = query.data.split('_')
     action = data[0]
@@ -220,22 +197,14 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             
             await query.answer(price_text, show_alert=True)
+        else:
+            await query.answer("آگهی یافت نشد یا فروخته شده است.")
         return
     
-    if action == "update":
+    elif action == "update":
+        await query.answer("قیمت بروز شد!")
         ad_data = db.get_ad(ad_id)
         if ad_data and not ad_data.get('sold'):
-            new_price_info = calculate_price(
-                ad_data['weight'],
-                ad_data['purity'],
-                ad_data['profit_percent'],
-                ad_data['labor_percent'],
-                ad_data['is_new']
-            )
-            
-            ad_data['price_info'] = new_price_info
-            db.update_price(ad_id, new_price_info)
-            
             condition = "نو ✨" if ad_data['is_new'] else "دست دوم 🔄"
             new_text = (
                 f"🏷 {ad_data['name']}\n"
@@ -255,29 +224,22 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 [InlineKeyboardButton("📱 تماس با فروشنده", url=f"tel:{ad_data['phone']}")],
                 [InlineKeyboardButton("❌ فروخته شد", callback_data=f"sold_{ad_id}")]
             ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
             
-            await query.edit_message_caption(
-                caption=new_text,
-                reply_markup=reply_markup
-            )
+            await query.edit_message_caption(caption=new_text, reply_markup=InlineKeyboardMarkup(keyboard))
     
     elif action == "sold":
+        await query.answer("آگهی فروخته شد.")
         ad_data = db.get_ad(ad_id)
         if ad_data:
             db.mark_as_sold(ad_id)
-            original_caption = query.message.caption
+            original_caption = query.message.caption or ""
             sold_caption = f"❌ فروخته شد ❌\n{original_caption}"
-            
-            await query.edit_message_caption(
-                caption=sold_caption
-            )
+            await query.edit_message_caption(caption=sold_caption)
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id in user_data_temp:
         del user_data_temp[user_id]
-    
     await update.message.reply_text("❌ عملیات لغو شد. برای شروع مجدد /start را بزنید.")
     return ConversationHandler.END
 
@@ -306,12 +268,7 @@ def main():
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == '__main__':
-    # Start health check server FIRST
     health_thread = threading.Thread(target=run_health_server, daemon=True)
     health_thread.start()
-    
-    # Give server time to start
     time.sleep(2)
-    
-    # Start bot
     main()
