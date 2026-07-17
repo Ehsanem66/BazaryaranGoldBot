@@ -20,7 +20,6 @@ def run_health_server():
     server = HTTPServer(('0.0.0.0', port), Handler)
     server.serve_forever()
 
-# تبدیل اعداد فارسی به انگلیسی
 def fa_to_en(text):
     persian_digits = '۰۱۲۳۴۵۶۷۸۹'
     english_digits = '0123456789'
@@ -122,7 +121,7 @@ async def condition_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_data_temp[user_id]['is_new'] = is_new
     condition_text = "نو ✨" if is_new else "دست دوم 🔄"
     
-    phone = "+989127136697"
+    phone = "09127136697"
     user_data_temp[user_id]['phone'] = phone
     user_data = user_data_temp[user_id]
     
@@ -152,7 +151,6 @@ async def condition_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     keyboard = [
         [InlineKeyboardButton("💰 مشاهده قیمت لحظه‌ای", callback_data=f"price_{ad_id}")],
-        [InlineKeyboardButton("📱 تماس با فروشنده", url=f"tel:{phone}")],
         [InlineKeyboardButton("❌ فروخته شد", callback_data=f"sold_{ad_id}")]
     ]
     
@@ -172,7 +170,6 @@ async def ad_button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
     
-    # فقط دکمه‌های price و sold
     if not (data.startswith("price_") or data.startswith("sold_")):
         return
     
@@ -230,10 +227,8 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     application = Application.builder().token(BOT_TOKEN).build()
     
-    # اول ad_button_handler
     application.add_handler(CallbackQueryHandler(ad_button_handler, pattern='^(price_|sold_)'))
     
-    # بعد ConversationHandler
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
         states={
