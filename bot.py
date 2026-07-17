@@ -122,7 +122,7 @@ async def condition_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_data_temp[user_id]['is_new'] = is_new
     condition_text = "نو ✨" if is_new else "دست دوم 🔄"
     
-    phone = "09127136697"
+    phone = "+989127136697"
     user_data_temp[user_id]['phone'] = phone
     user_data = user_data_temp[user_id]
     
