@@ -1,10 +1,24 @@
 import os
 from datetime import datetime
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import threading
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes, ConversationHandler
 from config import BOT_TOKEN, CHANNEL_ID, INSTAGRAM_ID
 from gold_price import calculate_price
 from database import AdDatabase
+
+# Health check server for Render
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b'Bot is running!')
+
+def run_health_server():
+    port = int(os.environ.get('PORT', 10000))
+    server = HTTPServer(('0.0.0.0', port), Handler)
+    server.serve_forever()
 
 # مراحل مکالمه
 (PHOTO, NAME, PURITY, WEIGHT, PROFIT_PERCENT, 
@@ -130,7 +144,6 @@ async def phone_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_data_temp[user_id]['phone'] = phone
     user_data = user_data_temp[user_id]
     
-    # محاسبه قیمت
     price_info = calculate_price(
         user_data['weight'],
         user_data['purity'],
@@ -139,7 +152,6 @@ async def phone_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data['is_new']
     )
     
-    # ساخت آگهی
     ad_id = f"{user_id}_{datetime.now().timestamp()}"
     ad_data = {
         'user_id': user_id,
@@ -151,7 +163,6 @@ async def phone_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     db.add_ad(ad_id, ad_data)
     
-    # متن آگهی
     condition = "نو ✨" if user_data['is_new'] else "دست دوم 🔄"
     ad_text = (
         f"🏷 {user_data['name']}\n"
@@ -290,4 +301,8 @@ def main():
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == '__main__':
+    # Start health check server for Render
+    health_thread = threading.Thread(target=run_health_server, daemon=True)
+    health_thread.start()
+    # Start bot
     main()
