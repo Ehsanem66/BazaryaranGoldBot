@@ -10,7 +10,7 @@ from gold_price import calculate_price
 from database import AdDatabase
 
 # ادمین‌ها (آیدی عددی)
-ADMIN_IDS = [123456789]  # آیدی عددی ادمین رو بذار
+ADMIN_IDS = [@Ehsanultimated]  # آیدی عددی ادمین رو بذار
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
