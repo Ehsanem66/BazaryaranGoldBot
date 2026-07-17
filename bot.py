@@ -9,7 +9,6 @@ from config import BOT_TOKEN, CHANNEL_ID, INSTAGRAM_ID
 from gold_price import calculate_price
 from database import AdDatabase
 
-# Health check server for Render
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -18,13 +17,10 @@ class Handler(BaseHTTPRequestHandler):
 
 def run_health_server():
     port = int(os.environ.get('PORT', 10000))
-    print(f"Health server on port {port}")
     server = HTTPServer(('0.0.0.0', port), Handler)
     server.serve_forever()
 
-# مراحل
-(PHOTO, NAME, PURITY, WEIGHT, PROFIT_PERCENT, 
- LABOR_PERCENT, CONDITION, PHONE) = range(8)
+PHOTO, NAME, PURITY, WEIGHT, PROFIT_PERCENT, LABOR_PERCENT, CONDITION, PHONE = range(8)
 
 db = AdDatabase()
 user_data_temp = {}
@@ -161,15 +157,19 @@ async def condition_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def phone_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def ad_button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-
-    if query.data.startswith("condition_"):
-    return
+    data = query.data
     
-    data = query.data.split('_', 1)
-    action = data[0] if '_' in query.data else query.data
-    ad_id = data[1] if '_' in query.data else query.data
+    # فقط دکمه‌های آگهی رو پردازش کن
+    if not (data.startswith("price_") or data.startswith("update_") or data.startswith("sold_")):
+        return
+    
+    await query.answer()
+    
+    parts = data.split('_', 1)
+    action = parts[0]
+    ad_id = parts[1] if len(parts) > 1 else ""
     
     if action == "price":
         ad_data = db.get_ad(ad_id)
@@ -190,48 +190,18 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"⚖ وزن: {ad_data['weight']} گرم\n"
                 f"📦 وضعیت: {condition}\n"
                 f"━━━━━━━━━━━━━━━━\n"
-                f"💰 قیمت پایه هر گرم (۱۸ عیار): {price_info['base_price_18k']:,.0f} تومان\n"
-                f"💎 قیمت هر گرم با عیار {ad_data['purity']}: {price_info['gram_price']:,.0f} تومان\n"
+                f"💰 قیمت پایه: {price_info['base_price_18k']:,.0f} تومان\n"
+                f"💎 قیمت هر گرم: {price_info['gram_price']:,.0f} تومان\n"
                 f"📈 قیمت خام: {price_info['raw_price']:,.0f} تومان\n"
-                f"💹 سود ({ad_data['profit_percent']}%): {price_info['profit']:,.0f} تومان\n"
-                f"🔧 اجرت ساخت ({ad_data['labor_percent']}%): {price_info['labor']:,.0f} تومان\n"
+                f"💹 سود: {price_info['profit']:,.0f} تومان\n"
+                f"🔧 اجرت: {price_info['labor']:,.0f} تومان\n"
                 f"━━━━━━━━━━━━━━━━\n"
                 f"💫 قیمت نهایی: {price_info['final_price']:,.0f} تومان"
             )
             
             await query.answer(price_text, show_alert=True)
-        else:
-            await query.answer("آگهی یافت نشد یا فروخته شده است.")
-        return
-    
-    elif action == "update":
-        await query.answer("قیمت بروز شد!")
-        ad_data = db.get_ad(ad_id)
-        if ad_data and not ad_data.get('sold'):
-            condition = "نو ✨" if ad_data['is_new'] else "دست دوم 🔄"
-            new_text = (
-                f"🏷 {ad_data['name']}\n"
-                f"━━━━━━━━━━━━━━━━\n"
-                f"📊 عیار: {ad_data['purity']}\n"
-                f"⚖ وزن: {ad_data['weight']} گرم\n"
-                f"📦 وضعیت: {condition}\n"
-                f"━━━━━━━━━━━━━━━━\n"
-                f"📞 تماس: {ad_data['phone']}\n"
-                f"━━━━━━━━━━━━━━━━\n"
-                f"🆔 کانال: {CHANNEL_ID}\n"
-                f"\n💰 برای مشاهده قیمت لحظه‌ای، دکمه زیر را بزنید:"
-            )
-            
-            keyboard = [
-                [InlineKeyboardButton("💰 مشاهده قیمت لحظه‌ای", callback_data=f"price_{ad_id}")],
-                [InlineKeyboardButton("📱 تماس با فروشنده", url=f"tel:{ad_data['phone']}")],
-                [InlineKeyboardButton("❌ فروخته شد", callback_data=f"sold_{ad_id}")]
-            ]
-            
-            await query.edit_message_caption(caption=new_text, reply_markup=InlineKeyboardMarkup(keyboard))
     
     elif action == "sold":
-        await query.answer("آگهی فروخته شد.")
         ad_data = db.get_ad(ad_id)
         if ad_data:
             db.mark_as_sold(ad_id)
@@ -243,7 +213,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id in user_data_temp:
         del user_data_temp[user_id]
-    await update.message.reply_text("❌ عملیات لغو شد. برای شروع مجدد /start را بزنید.")
+    await update.message.reply_text("❌ عملیات لغو شد.")
     return ConversationHandler.END
 
 def main():
@@ -265,7 +235,8 @@ def main():
     )
     
     application.add_handler(conv_handler)
-    application.add_handler(CallbackQueryHandler(button_handler, pattern='^[0-9]'))
+    # فقط دکمه‌های price و sold رو بگیر
+    application.add_handler(CallbackQueryHandler(ad_button_handler, pattern='^(price_|sold_)'))
     
     print("🌟 Bazaryaran GoldBot is running...")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
