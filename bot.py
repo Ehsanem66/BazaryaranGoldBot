@@ -133,26 +133,18 @@ async def condition_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_data_temp[user_id]['is_new'] = is_new
     
     condition_text = "نو ✨" if is_new else "دست دوم 🔄"
-    await query.edit_message_text(f"✅ وضعیت: {condition_text}\n\nدر حال ثبت آگهی...")
     
-    # مستقیم برو به ثبت آگهی با شماره پیش‌فرض
+    # شماره ثابت
     phone = "09127136697"
     user_data_temp[user_id]['phone'] = phone
     user_data = user_data_temp[user_id]
     
-    price_info = calculate_price(
-        user_data['weight'],
-        user_data['purity'],
-        user_data['profit_percent'],
-        user_data['labor_percent'],
-        user_data['is_new']
-    )
-    
+    # ذخیره اطلاعات اولیه (بدون محاسبه قیمت)
     ad_id = f"{user_id}_{datetime.now().timestamp()}"
     ad_data = {
         'user_id': user_id,
         **user_data,
-        'price_info': price_info,
+        'price_info': None,
         'sold': False,
         'created_at': datetime.now().isoformat()
     }
@@ -166,27 +158,19 @@ async def condition_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"⚖ وزن: {user_data['weight']} گرم\n"
         f"📦 وضعیت: {condition_text}\n"
         f"━━━━━━━━━━━━━━━━\n"
-        f"💰 قیمت پایه هر گرم (۱۸ عیار): {price_info['base_price_18k']:,.0f} تومان\n"
-        f"💎 قیمت هر گرم با عیار {user_data['purity']}: {price_info['gram_price']:,.0f} تومان\n"
-        f"📈 قیمت خام: {price_info['raw_price']:,.0f} تومان\n"
-        f"💹 سود ({user_data['profit_percent']}%): {price_info['profit']:,.0f} تومان\n"
-        f"🔧 اجرت ساخت ({user_data['labor_percent']}%): {price_info['labor']:,.0f} تومان\n"
-        f"━━━━━━━━━━━━━━━━\n"
-        f"💫 قیمت نهایی: {price_info['final_price']:,.0f} تومان\n"
-        f"━━━━━━━━━━━━━━━━\n"
         f"📞 تماس: {phone}\n"
         f"━━━━━━━━━━━━━━━━\n"
-        f"🆔 کانال: {CHANNEL_ID}"
+        f"🆔 کانال: {CHANNEL_ID}\n"
+        f"\n💰 برای مشاهده قیمت لحظه‌ای، دکمه زیر را بزنید:"
     )
     
     keyboard = [
+        [InlineKeyboardButton("💰 مشاهده قیمت لحظه‌ای", callback_data=f"price_{ad_id}")],
         [InlineKeyboardButton("📱 تماس با فروشنده", url=f"tel:{phone}")],
-        [InlineKeyboardButton("🔄 بروزرسانی قیمت", callback_data=f"update_{ad_id}")],
         [InlineKeyboardButton("❌ فروخته شد", callback_data=f"sold_{ad_id}")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    # ارسال عکس آگهی
     await query.message.reply_photo(
         photo=user_data['photo_id'],
         caption=ad_text,
@@ -197,7 +181,6 @@ async def condition_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 async def phone_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # این تابع دیگه استفاده نمیشه - همه چیز توی condition_handler انجام میشه
     return ConversationHandler.END
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -207,6 +190,37 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data.split('_')
     action = data[0]
     ad_id = '_'.join(data[1:])
+    
+    if action == "price":
+        ad_data = db.get_ad(ad_id)
+        if ad_data and not ad_data.get('sold'):
+            price_info = calculate_price(
+                ad_data['weight'],
+                ad_data['purity'],
+                ad_data['profit_percent'],
+                ad_data['labor_percent'],
+                ad_data['is_new']
+            )
+            
+            condition = "نو ✨" if ad_data['is_new'] else "دست دوم 🔄"
+            price_text = (
+                f"💎 قیمت لحظه‌ای {ad_data['name']}\n"
+                f"━━━━━━━━━━━━━━━━\n"
+                f"📊 عیار: {ad_data['purity']}\n"
+                f"⚖ وزن: {ad_data['weight']} گرم\n"
+                f"📦 وضعیت: {condition}\n"
+                f"━━━━━━━━━━━━━━━━\n"
+                f"💰 قیمت پایه هر گرم (۱۸ عیار): {price_info['base_price_18k']:,.0f} تومان\n"
+                f"💎 قیمت هر گرم با عیار {ad_data['purity']}: {price_info['gram_price']:,.0f} تومان\n"
+                f"📈 قیمت خام: {price_info['raw_price']:,.0f} تومان\n"
+                f"💹 سود ({ad_data['profit_percent']}%): {price_info['profit']:,.0f} تومان\n"
+                f"🔧 اجرت ساخت ({ad_data['labor_percent']}%): {price_info['labor']:,.0f} تومان\n"
+                f"━━━━━━━━━━━━━━━━\n"
+                f"💫 قیمت نهایی: {price_info['final_price']:,.0f} تومان"
+            )
+            
+            await query.answer(price_text, show_alert=True)
+        return
     
     if action == "update":
         ad_data = db.get_ad(ad_id)
@@ -230,22 +244,15 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"⚖ وزن: {ad_data['weight']} گرم\n"
                 f"📦 وضعیت: {condition}\n"
                 f"━━━━━━━━━━━━━━━━\n"
-                f"💰 قیمت پایه هر گرم (۱۸ عیار): {new_price_info['base_price_18k']:,.0f} تومان\n"
-                f"💎 قیمت هر گرم با عیار {ad_data['purity']}: {new_price_info['gram_price']:,.0f} تومان\n"
-                f"📈 قیمت خام: {new_price_info['raw_price']:,.0f} تومان\n"
-                f"💹 سود ({ad_data['profit_percent']}%): {new_price_info['profit']:,.0f} تومان\n"
-                f"🔧 اجرت ساخت ({ad_data['labor_percent']}%): {new_price_info['labor']:,.0f} تومان\n"
-                f"━━━━━━━━━━━━━━━━\n"
-                f"💫 قیمت نهایی: {new_price_info['final_price']:,.0f} تومان\n"
-                f"━━━━━━━━━━━━━━━━\n"
                 f"📞 تماس: {ad_data['phone']}\n"
                 f"━━━━━━━━━━━━━━━━\n"
-                f"🆔 کانال: {CHANNEL_ID}"
+                f"🆔 کانال: {CHANNEL_ID}\n"
+                f"\n💰 برای مشاهده قیمت لحظه‌ای، دکمه زیر را بزنید:"
             )
             
             keyboard = [
+                [InlineKeyboardButton("💰 مشاهده قیمت لحظه‌ای", callback_data=f"price_{ad_id}")],
                 [InlineKeyboardButton("📱 تماس با فروشنده", url=f"tel:{ad_data['phone']}")],
-                [InlineKeyboardButton("🔄 بروزرسانی قیمت", callback_data=f"update_{ad_id}")],
                 [InlineKeyboardButton("❌ فروخته شد", callback_data=f"sold_{ad_id}")]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
@@ -293,7 +300,7 @@ def main():
     )
     
     application.add_handler(conv_handler)
-    application.add_handler(CallbackQueryHandler(button_handler, pattern='^(update|sold)_'))
+    application.add_handler(CallbackQueryHandler(button_handler, pattern='^(price|update|sold)_'))
     
     print("🌟 Bazaryaran GoldBot is running...")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
