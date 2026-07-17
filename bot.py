@@ -6,7 +6,7 @@ import threading
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes, ConversationHandler
 from config import BOT_TOKEN, CHANNEL_ID, INSTAGRAM_ID
-from gold_price import calculate_price
+from gold_price import calculate_price, send_alert_to_admin, ADMIN_ID as GOLD_ADMIN_ID
 from database import AdDatabase
 
 # ادمین‌ها (آیدی عددی)
@@ -41,7 +41,6 @@ user_data_temp = {}
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     
-    # فقط ادمین می‌تونه آگهی بده
     if not is_admin(user_id):
         await update.message.reply_text(
             "⛔ *دسترسی محدود*\n\n"
@@ -76,8 +75,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "5️⃣ وارد کردن درصد سود\n"
         "6️⃣ وارد کردن درصد اجرت ساخت\n"
         "7️⃣ انتخاب وضعیت (نو یا دست دوم)\n\n"
-        "💰 *مشاهده قیمت لحظه‌ای:*\n"
-        "همه کاربران میتوانند با دکمه «مشاهده قیمت لحظه‌ای» قیمت را ببینند.\n\n"
+        "💰 *بروزرسانی قیمت:*\n"
+        "همه کاربران میتوانند قیمت را بروزرسانی کنند.\n\n"
         "📞 *شماره تماس:* 09127136697\n\n"
         "🆔 کانال: @bazaryaranby\n"
         "🤖 ربات: @BazaryaranBot\n\n"
@@ -229,6 +228,14 @@ async def condition_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data['is_new']
     )
     
+    # هشدار به ادمین اگه API کار نکرده
+    if price_info['base_price_18k'] == 5_000_000:
+        await send_alert_to_admin(context, 
+            "⚠️ *هشدار: API قیمت طلا در دسترس نیست!*\n"
+            "قیمت پیش‌فرض ۵ میلیون تومان استفاده شد.\n"
+            "لطفاً قیمت را در فایل gold_price.py بروز کنید."
+        )
+    
     ad_id = f"{user_id}_{datetime.now().timestamp()}"
     ad_data = {
         'user_id': user_id,
@@ -313,6 +320,13 @@ async def ad_button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ad_data['labor_percent'],
                 ad_data['is_new']
             )
+            
+            # هشدار به ادمین اگه API کار نکرده
+            if price_info['base_price_18k'] == 5_000_000:
+                await send_alert_to_admin(context, 
+                    "⚠️ *هشدار: API قیمت طلا در دسترس نیست!*\n"
+                    "قیمت پیش‌فرض ۵ میلیون تومان استفاده شد."
+                )
             
             ad_data['price_info'] = price_info
             db.update_price(ad_id, price_info)
