@@ -9,6 +9,9 @@ from config import BOT_TOKEN, CHANNEL_ID, INSTAGRAM_ID
 from gold_price import calculate_price
 from database import AdDatabase
 
+# ادمین‌ها (آیدی عددی)
+ADMIN_IDS = [123456789]  # آیدی عددی ادمین رو بذار
+
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -35,15 +38,20 @@ user_data_temp = {}
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user_data_temp[user_id] = {}
-    await update.message.reply_text("🌟 به ربات طلافروشی بازاریاران خوش آمدید!\n\n📸 لطفاً عکس طلای خود را ارسال کنید:")
+    
+    welcome_text = (
+        "🌟 *به ربات طلافروشی بازاریاران خوش آمدید!*\n\n"
+        "📸 لطفاً عکس طلای خود را ارسال کنید:\n\n"
+        "📌 _برای راهنما /help را بزنید_"
+    )
+    await update.message.reply_text(welcome_text, parse_mode='Markdown')
     return PHOTO
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """راهنمای ربات"""
     help_text = (
-        "📚 **راهنمای ربات بازاریاران**\n\n"
+        "📚 *راهنمای ربات بازاریاران*\n\n"
         "🏷 این ربات برای ثبت آگهی طلا در کانال @bazaryaranby طراحی شده است.\n\n"
-        "📋 **مراحل ثبت آگهی:**\n"
+        "📋 *مراحل ثبت آگهی:*\n"
         "1️⃣ ارسال عکس طلا\n"
         "2️⃣ وارد کردن نام (مثلاً: گردنبند قلب)\n"
         "3️⃣ انتخاب عیار (۱۴ تا ۲۴)\n"
@@ -51,23 +59,23 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "5️⃣ وارد کردن درصد سود فروشنده (مثلاً: 15)\n"
         "6️⃣ وارد کردن درصد اجرت ساخت (مثلاً: 10)\n"
         "7️⃣ انتخاب وضعیت (نو یا دست دوم)\n\n"
-        "💰 **مشاهده قیمت لحظه‌ای:**\n"
+        "💰 *مشاهده قیمت لحظه‌ای:*\n"
         "بعد از ثبت آگهی، مشتری با دکمه «مشاهده قیمت لحظه‌ای» قیمت را می‌بیند.\n\n"
-        "📞 **شماره تماس:** 09127136697\n\n"
+        "📞 *شماره تماس:* 09127136697\n\n"
         "🆔 کانال: @bazaryaranby\n"
         "🤖 ربات: @BazaryaranBot\n\n"
-        "📌 **دستورات:**\n"
+        "📌 *دستورات:*\n"
         "/start - ثبت آگهی جدید\n"
         "/help - راهنما\n"
         "/cancel - لغو عملیات\n"
-        "/about - درباره ما"
+        "/about - درباره ما\n"
+        "/support - پشتیبانی"
     )
     await update.message.reply_text(help_text, parse_mode='Markdown')
 
 async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """درباره ما"""
     about_text = (
-        "🏢 **بازاریاران**\n\n"
+        "🏢 *بازاریاران*\n\n"
         "✨ اولین ربات تخصصی طلافروشی\n"
         "📱 ثبت آگهی رایگان در کانال\n"
         "💰 محاسبه قیمت لحظه‌ای طلا\n"
@@ -78,6 +86,16 @@ async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🤖 ربات: @BazaryaranBot"
     )
     await update.message.reply_text(about_text, parse_mode='Markdown')
+
+async def support_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "📞 *پشتیبانی بازاریاران*\n\n"
+        "📱 تماس: 09127136697\n"
+        "🆔 کانال: @bazaryaranby\n"
+        "🤖 ربات: @BazaryaranBot\n\n"
+        "💬 جهت ارتباط با پشتیبانی به آیدی زیر پیام دهید:",
+        parse_mode='Markdown'
+    )
 
 async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -190,30 +208,34 @@ async def condition_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"\n💰 برای مشاهده قیمت لحظه‌ای، دکمه زیر را بزنید:"
     )
     
+    # دکمه فروخته شد فقط برای کاربر ثبت‌کننده (و ادمین)
     keyboard = [
         [InlineKeyboardButton("💰 مشاهده قیمت لحظه‌ای", callback_data=f"price_{ad_id}")],
         [InlineKeyboardButton("❌ فروخته شد", callback_data=f"sold_{ad_id}")]
     ]
     
-    # ارسال به کاربر
     await query.message.reply_photo(
         photo=user_data['photo_id'],
         caption=ad_text + "\n\n✅ آگهی شما با موفقیت ثبت شد!",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
     
-    # ارسال همزمان به کانال
+    # ارسال به کانال (بدون دکمه فروخته شد)
     try:
+        channel_keyboard = [
+            [InlineKeyboardButton("💰 مشاهده قیمت لحظه‌ای", callback_data=f"price_{ad_id}")],
+            [InlineKeyboardButton("❌ فروخته شد", callback_data=f"sold_{ad_id}")]
+        ]
         channel_text = ad_text + "\n\n📱 جهت ثبت آگهی رایگان: @BazaryaranBot"
         await context.bot.send_photo(
             chat_id=CHANNEL_ID,
             photo=user_data['photo_id'],
             caption=channel_text,
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=InlineKeyboardMarkup(channel_keyboard)
         )
     except Exception as e:
         print(f"Channel error: {e}")
-        await query.message.reply_text("⚠️ آگهی ثبت شد اما در کانال قرار نگرفت. لطفاً ادمین را مطلع کنید.")
+        await query.message.reply_text("⚠️ آگهی ثبت شد اما در کانال قرار نگرفت.")
     
     del user_data_temp[user_id]
     return ConversationHandler.END
@@ -224,17 +246,17 @@ async def phone_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def ad_button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
+    user_id = update.effective_user.id
     
     if not (data.startswith("price_") or data.startswith("sold_")):
         return
-    
-    await query.answer()
     
     parts = data.split('_', 1)
     action = parts[0]
     ad_id = parts[1] if len(parts) > 1 else ""
     
     if action == "price":
+        await query.answer()
         ad_data = db.get_ad(ad_id)
         if ad_data and not ad_data.get('sold'):
             price_info = calculate_price(
@@ -264,36 +286,39 @@ async def ad_button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             
             await query.answer(price_text, show_alert=True)
-        else:
-            await query.answer("❌ این آگهی فروخته شده است.", show_alert=True)
     
     elif action == "sold":
         ad_data = db.get_ad(ad_id)
         if ad_data:
-            db.mark_as_sold(ad_id)
-            original_caption = query.message.caption or ""
-            sold_caption = f"❌ فروخته شد ❌\n\n{original_caption}"
-            await query.edit_message_caption(caption=sold_caption)
-            await query.answer("✅ آگهی با موفقیت به فروش رسید.", show_alert=True)
+            # فقط صاحب آگهی یا ادمین می‌تونه بزنه
+            if user_id == ad_data['user_id'] or user_id in ADMIN_IDS:
+                await query.answer()
+                db.mark_as_sold(ad_id)
+                original_caption = query.message.caption or ""
+                sold_caption = f"❌ فروخته شد ❌\n\n{original_caption}"
+                await query.edit_message_caption(caption=sold_caption)
+            else:
+                await query.answer("❌ فقط فروشنده یا ادمین میتواند این دکمه را بزند.", show_alert=True)
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id in user_data_temp:
         del user_data_temp[user_id]
-    await update.message.reply_text("❌ عملیات لغو شد.\nبرای شروع مجدد /start\nبرای راهنما /help")
+    await update.message.reply_text("❌ عملیات لغو شد.\n/start - ثبت آگهی جدید\n/help - راهنما")
     return ConversationHandler.END
 
 def main():
     application = Application.builder().token(BOT_TOKEN).build()
     
-    # اضافه کردن دستورات
+    # دستورات
     application.add_handler(CommandHandler('help', help_command))
     application.add_handler(CommandHandler('about', about_command))
+    application.add_handler(CommandHandler('support', support_command))
     
-    # هندلر دکمه‌های آگهی
+    # دکمه‌ها
     application.add_handler(CallbackQueryHandler(ad_button_handler, pattern='^(price_|sold_)'))
     
-    # مکالمه ثبت آگهی
+    # مکالمه
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
         states={
