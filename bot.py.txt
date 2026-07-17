@@ -1,0 +1,293 @@
+import os
+from datetime import datetime
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes, ConversationHandler
+from config import BOT_TOKEN, CHANNEL_ID, INSTAGRAM_ID
+from gold_price import calculate_price
+from database import AdDatabase
+
+# مراحل مکالمه
+(PHOTO, NAME, PURITY, WEIGHT, PROFIT_PERCENT, 
+ LABOR_PERCENT, CONDITION, PHONE) = range(8)
+
+db = AdDatabase()
+user_data_temp = {}
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    user_data_temp[user_id] = {}
+    
+    welcome_text = (
+        "🌟 به ربات طلافروشی بازاریاران خوش آمدید!\n\n"
+        "📸 لطفاً عکس طلای خود را ارسال کنید:"
+    )
+    
+    await update.message.reply_text(welcome_text)
+    return PHOTO
+
+async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    user_data_temp[user_id]['photo_id'] = update.message.photo[-1].file_id
+    
+    await update.message.reply_text("📝 نام طلا را وارد کنید (مثلاً: گردنبند قلب):")
+    return NAME
+
+async def name_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    user_data_temp[user_id]['name'] = update.message.text
+    
+    keyboard = [
+        [InlineKeyboardButton("۱۴ عیار", callback_data="purity_14"),
+         InlineKeyboardButton("۱۸ عیار", callback_data="purity_18")],
+        [InlineKeyboardButton("۲۱ عیار", callback_data="purity_21"),
+         InlineKeyboardButton("۲۲ عیار", callback_data="purity_22")],
+        [InlineKeyboardButton("۲۴ عیار", callback_data="purity_24")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await update.message.reply_text("📊 عیار طلا را انتخاب کنید:", reply_markup=reply_markup)
+    return PURITY
+
+async def purity_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = update.effective_user.id
+    purity = int(query.data.split('_')[1])
+    user_data_temp[user_id]['purity'] = purity
+    
+    await query.edit_message_text(f"✅ عیار انتخابی: {purity}\n\n⚖ وزن طلا را به گرم وارد کنید (مثلاً: 5.2):")
+    return WEIGHT
+
+async def weight_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    try:
+        weight = float(update.message.text)
+        if weight <= 0:
+            raise ValueError
+        user_data_temp[user_id]['weight'] = weight
+        
+        await update.message.reply_text("📈 درصد سود فروشنده را وارد کنید (فقط عدد، مثلاً: 15):")
+        return PROFIT_PERCENT
+    except ValueError:
+        await update.message.reply_text("❌ لطفاً یک عدد معتبر وارد کنید:")
+        return WEIGHT
+
+async def profit_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    try:
+        profit = float(update.message.text)
+        if profit < 0:
+            raise ValueError
+        user_data_temp[user_id]['profit_percent'] = profit
+        
+        await update.message.reply_text("🔧 درصد اجرت ساخت را وارد کنید (فقط عدد، مثلاً: 10):")
+        return LABOR_PERCENT
+    except ValueError:
+        await update.message.reply_text("❌ لطفاً یک عدد معتبر وارد کنید:")
+        return PROFIT_PERCENT
+
+async def labor_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    try:
+        labor = float(update.message.text)
+        if labor < 0:
+            raise ValueError
+        user_data_temp[user_id]['labor_percent'] = labor
+        
+        keyboard = [
+            [InlineKeyboardButton("نو ✨", callback_data="condition_new"),
+             InlineKeyboardButton("دست دوم 🔄", callback_data="condition_used")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_text("📦 وضعیت طلا:", reply_markup=reply_markup)
+        return CONDITION
+    except ValueError:
+        await update.message.reply_text("❌ لطفاً یک عدد معتبر وارد کنید:")
+        return LABOR_PERCENT
+
+async def condition_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = update.effective_user.id
+    is_new = query.data.split('_')[1] == 'new'
+    user_data_temp[user_id]['is_new'] = is_new
+    
+    condition_text = "نو ✨" if is_new else "دست دوم 🔄"
+    await query.edit_message_text(f"✅ وضعیت: {condition_text}\n\n📞 شماره تماس خود را وارد کنید:")
+    return PHONE
+
+async def phone_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    phone = update.message.text
+    
+    if not phone.replace('+', '').replace('0', '').isdigit() or len(phone) < 10:
+        await update.message.reply_text("❌ لطفاً یک شماره تماس معتبر وارد کنید:")
+        return PHONE
+    
+    user_data_temp[user_id]['phone'] = phone
+    user_data = user_data_temp[user_id]
+    
+    # محاسبه قیمت
+    price_info = calculate_price(
+        user_data['weight'],
+        user_data['purity'],
+        user_data['profit_percent'],
+        user_data['labor_percent'],
+        user_data['is_new']
+    )
+    
+    # ساخت آگهی
+    ad_id = f"{user_id}_{datetime.now().timestamp()}"
+    ad_data = {
+        'user_id': user_id,
+        **user_data,
+        'price_info': price_info,
+        'sold': False,
+        'created_at': datetime.now().isoformat()
+    }
+    
+    db.add_ad(ad_id, ad_data)
+    
+    # متن آگهی
+    condition = "نو ✨" if user_data['is_new'] else "دست دوم 🔄"
+    ad_text = (
+        f"🏷 {user_data['name']}\n"
+        f"━━━━━━━━━━━━━━━━\n"
+        f"📊 عیار: {user_data['purity']}\n"
+        f"⚖ وزن: {user_data['weight']} گرم\n"
+        f"📦 وضعیت: {condition}\n"
+        f"━━━━━━━━━━━━━━━━\n"
+        f"💰 قیمت پایه هر گرم (۱۸ عیار): {price_info['base_price_18k']:,.0f} تومان\n"
+        f"💎 قیمت هر گرم با عیار {user_data['purity']}: {price_info['gram_price']:,.0f} تومان\n"
+        f"📈 قیمت خام: {price_info['raw_price']:,.0f} تومان\n"
+        f"💹 سود ({user_data['profit_percent']}%): {price_info['profit']:,.0f} تومان\n"
+        f"🔧 اجرت ساخت ({user_data['labor_percent']}%): {price_info['labor']:,.0f} تومان\n"
+        f"━━━━━━━━━━━━━━━━\n"
+        f"💫 قیمت نهایی: {price_info['final_price']:,.0f} تومان\n"
+        f"━━━━━━━━━━━━━━━━\n"
+        f"📞 تماس: {phone}\n"
+        f"━━━━━━━━━━━━━━━━\n"
+        f"🆔 کانال: {CHANNEL_ID}\n"
+        f"📱 اینستاگرام: {INSTAGRAM_ID}"
+    )
+    
+    keyboard = [
+        [InlineKeyboardButton("📱 تماس با فروشنده", url=f"tel:{phone}")],
+        [InlineKeyboardButton("🔄 بروزرسانی قیمت", callback_data=f"update_{ad_id}")],
+        [InlineKeyboardButton("❌ فروخته شد", callback_data=f"sold_{ad_id}")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await update.message.reply_photo(
+        photo=user_data['photo_id'],
+        caption=ad_text,
+        reply_markup=reply_markup
+    )
+    
+    del user_data_temp[user_id]
+    return ConversationHandler.END
+
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    data = query.data.split('_')
+    action = data[0]
+    ad_id = '_'.join(data[1:])
+    
+    if action == "update":
+        ad_data = db.get_ad(ad_id)
+        if ad_data and not ad_data.get('sold'):
+            new_price_info = calculate_price(
+                ad_data['weight'],
+                ad_data['purity'],
+                ad_data['profit_percent'],
+                ad_data['labor_percent'],
+                ad_data['is_new']
+            )
+            
+            ad_data['price_info'] = new_price_info
+            db.update_price(ad_id, new_price_info)
+            
+            condition = "نو ✨" if ad_data['is_new'] else "دست دوم 🔄"
+            new_text = (
+                f"🏷 {ad_data['name']}\n"
+                f"━━━━━━━━━━━━━━━━\n"
+                f"📊 عیار: {ad_data['purity']}\n"
+                f"⚖ وزن: {ad_data['weight']} گرم\n"
+                f"📦 وضعیت: {condition}\n"
+                f"━━━━━━━━━━━━━━━━\n"
+                f"💰 قیمت پایه هر گرم (۱۸ عیار): {new_price_info['base_price_18k']:,.0f} تومان\n"
+                f"💎 قیمت هر گرم با عیار {ad_data['purity']}: {new_price_info['gram_price']:,.0f} تومان\n"
+                f"📈 قیمت خام: {new_price_info['raw_price']:,.0f} تومان\n"
+                f"💹 سود ({ad_data['profit_percent']}%): {new_price_info['profit']:,.0f} تومان\n"
+                f"🔧 اجرت ساخت ({ad_data['labor_percent']}%): {new_price_info['labor']:,.0f} تومان\n"
+                f"━━━━━━━━━━━━━━━━\n"
+                f"💫 قیمت نهایی: {new_price_info['final_price']:,.0f} تومان\n"
+                f"━━━━━━━━━━━━━━━━\n"
+                f"📞 تماس: {ad_data['phone']}\n"
+                f"━━━━━━━━━━━━━━━━\n"
+                f"🆔 کانال: {CHANNEL_ID}\n"
+                f"📱 اینستاگرام: {INSTAGRAM_ID}"
+            )
+            
+            keyboard = [
+                [InlineKeyboardButton("📱 تماس با فروشنده", url=f"tel:{ad_data['phone']}")],
+                [InlineKeyboardButton("🔄 بروزرسانی قیمت", callback_data=f"update_{ad_id}")],
+                [InlineKeyboardButton("❌ فروخته شد", callback_data=f"sold_{ad_id}")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.edit_message_caption(
+                caption=new_text,
+                reply_markup=reply_markup
+            )
+    
+    elif action == "sold":
+        ad_data = db.get_ad(ad_id)
+        if ad_data:
+            db.mark_as_sold(ad_id)
+            original_caption = query.message.caption
+            sold_caption = f"❌ فروخته شد ❌\n{original_caption}"
+            
+            await query.edit_message_caption(
+                caption=sold_caption
+            )
+
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id in user_data_temp:
+        del user_data_temp[user_id]
+    
+    await update.message.reply_text("❌ عملیات لغو شد. برای شروع مجدد /start را بزنید.")
+    return ConversationHandler.END
+
+def main():
+    application = Application.builder().token(BOT_TOKEN).build()
+    
+    conv_handler = ConversationHandler(
+        entry_points=[CommandHandler('start', start)],
+        states={
+            PHOTO: [MessageHandler(filters.PHOTO, photo_handler)],
+            NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, name_handler)],
+            PURITY: [CallbackQueryHandler(purity_handler, pattern='^purity_')],
+            WEIGHT: [MessageHandler(filters.TEXT & ~filters.COMMAND, weight_handler)],
+            PROFIT_PERCENT: [MessageHandler(filters.TEXT & ~filters.COMMAND, profit_handler)],
+            LABOR_PERCENT: [MessageHandler(filters.TEXT & ~filters.COMMAND, labor_handler)],
+            CONDITION: [CallbackQueryHandler(condition_handler, pattern='^condition_')],
+            PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, phone_handler)],
+        },
+        fallbacks=[CommandHandler('cancel', cancel)],
+    )
+    
+    application.add_handler(conv_handler)
+    application.add_handler(CallbackQueryHandler(button_handler, pattern='^(update|sold)_'))
+    
+    print("🌟 Bazaryaran GoldBot is running...")
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
+
+if __name__ == '__main__':
+    main()

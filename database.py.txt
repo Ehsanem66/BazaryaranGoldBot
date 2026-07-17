@@ -1,0 +1,45 @@
+import json
+import os
+from datetime import datetime
+
+class AdDatabase:
+    def __init__(self, db_file='ads_database.json'):
+        self.db_file = db_file
+        self.ads = {}
+        self.load_database()
+    
+    def load_database(self):
+        if os.path.exists(self.db_file):
+            try:
+                with open(self.db_file, 'r', encoding='utf-8') as f:
+                    self.ads = json.load(f)
+            except:
+                self.ads = {}
+    
+    def save_database(self):
+        try:
+            with open(self.db_file, 'w', encoding='utf-8') as f:
+                json.dump(self.ads, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"Error saving: {e}")
+    
+    def add_ad(self, ad_id, ad_data):
+        self.ads[ad_id] = ad_data
+        self.save_database()
+    
+    def get_ad(self, ad_id):
+        return self.ads.get(ad_id)
+    
+    def mark_as_sold(self, ad_id):
+        if ad_id in self.ads:
+            self.ads[ad_id]['sold'] = True
+            self.save_database()
+            return True
+        return False
+    
+    def update_price(self, ad_id, new_price_data):
+        if ad_id in self.ads:
+            self.ads[ad_id]['price_info'] = new_price_data
+            self.save_database()
+            return True
+        return False
