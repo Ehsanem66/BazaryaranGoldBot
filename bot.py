@@ -1,4 +1,5 @@
 import os
+import time
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import threading
@@ -17,7 +18,9 @@ class Handler(BaseHTTPRequestHandler):
 
 def run_health_server():
     port = int(os.environ.get('PORT', 10000))
+    print(f"🔌 Health server starting on port {port}...")
     server = HTTPServer(('0.0.0.0', port), Handler)
+    print(f"✅ Health server running on port {port}")
     server.serve_forever()
 
 # مراحل مکالمه
@@ -301,8 +304,12 @@ def main():
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == '__main__':
-    # Start health check server for Render
+    # Start health check server FIRST
     health_thread = threading.Thread(target=run_health_server, daemon=True)
     health_thread.start()
+    
+    # Give server time to start
+    time.sleep(2)
+    
     # Start bot
     main()
