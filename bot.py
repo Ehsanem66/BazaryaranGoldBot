@@ -20,6 +20,14 @@ def run_health_server():
     server = HTTPServer(('0.0.0.0', port), Handler)
     server.serve_forever()
 
+# تبدیل اعداد فارسی به انگلیسی
+def fa_to_en(text):
+    persian_digits = '۰۱۲۳۴۵۶۷۸۹'
+    english_digits = '0123456789'
+    for p, e in zip(persian_digits, english_digits):
+        text = text.replace(p, e)
+    return text
+
 PHOTO, NAME, PURITY, WEIGHT, PROFIT_PERCENT, LABOR_PERCENT, CONDITION, PHONE = range(8)
 
 db = AdDatabase()
@@ -62,7 +70,8 @@ async def purity_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def weight_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     try:
-        weight = float(update.message.text)
+        text = fa_to_en(update.message.text)
+        weight = float(text)
         if weight <= 0:
             raise ValueError
         user_data_temp[user_id]['weight'] = weight
@@ -75,7 +84,8 @@ async def weight_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def profit_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     try:
-        profit = float(update.message.text)
+        text = fa_to_en(update.message.text)
+        profit = float(text)
         if profit < 0:
             raise ValueError
         user_data_temp[user_id]['profit_percent'] = profit
@@ -88,7 +98,8 @@ async def profit_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def labor_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     try:
-        labor = float(update.message.text)
+        text = fa_to_en(update.message.text)
+        labor = float(text)
         if labor < 0:
             raise ValueError
         user_data_temp[user_id]['labor_percent'] = labor
@@ -161,8 +172,8 @@ async def ad_button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
     
-    # فقط دکمه‌های آگهی رو پردازش کن
-    if not (data.startswith("price_") or data.startswith("update_") or data.startswith("sold_")):
+    # فقط دکمه‌های price و sold
+    if not (data.startswith("price_") or data.startswith("sold_")):
         return
     
     await query.answer()
@@ -190,7 +201,7 @@ async def ad_button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"⚖ وزن: {ad_data['weight']} گرم\n"
                 f"📦 وضعیت: {condition}\n"
                 f"━━━━━━━━━━━━━━━━\n"
-                f"💰 قیمت پایه: {price_info['base_price_18k']:,.0f} تومان\n"
+                f"💰 قیمت پایه هر گرم: {price_info['base_price_18k']:,.0f} تومان\n"
                 f"💎 قیمت هر گرم: {price_info['gram_price']:,.0f} تومان\n"
                 f"📈 قیمت خام: {price_info['raw_price']:,.0f} تومان\n"
                 f"💹 سود: {price_info['profit']:,.0f} تومان\n"
@@ -213,12 +224,16 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id in user_data_temp:
         del user_data_temp[user_id]
-    await update.message.reply_text("❌ عملیات لغو شد.")
+    await update.message.reply_text("❌ عملیات لغو شد. برای شروع مجدد /start را بزنید.")
     return ConversationHandler.END
 
 def main():
     application = Application.builder().token(BOT_TOKEN).build()
     
+    # اول ad_button_handler
+    application.add_handler(CallbackQueryHandler(ad_button_handler, pattern='^(price_|sold_)'))
+    
+    # بعد ConversationHandler
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
         states={
@@ -235,8 +250,6 @@ def main():
     )
     
     application.add_handler(conv_handler)
-    # فقط دکمه‌های price و sold رو بگیر
-    application.add_handler(CallbackQueryHandler(ad_button_handler, pattern='^(price_|sold_)'))
     
     print("🌟 Bazaryaran GoldBot is running...")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
