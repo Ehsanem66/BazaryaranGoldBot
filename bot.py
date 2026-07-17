@@ -10,7 +10,7 @@ from gold_price import calculate_price
 from database import AdDatabase
 
 # ادمین‌ها (آیدی عددی)
-ADMIN_IDS = [106546961]  # آیدی عددی ادمین رو بذار
+ADMIN_IDS = [106546961]  # آیدی عددی خودت رو بذار
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -30,6 +30,9 @@ def fa_to_en(text):
         text = text.replace(p, e)
     return text
 
+def is_admin(user_id):
+    return user_id in ADMIN_IDS
+
 PHOTO, NAME, PURITY, WEIGHT, PROFIT_PERCENT, LABOR_PERCENT, CONDITION, PHONE = range(8)
 
 db = AdDatabase()
@@ -37,6 +40,19 @@ user_data_temp = {}
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
+    
+    # فقط ادمین می‌تونه آگهی بده
+    if not is_admin(user_id):
+        await update.message.reply_text(
+            "⛔ *دسترسی محدود*\n\n"
+            "فقط ادمین میتواند آگهی ثبت کند.\n\n"
+            "💰 برای مشاهده قیمت طلا از دکمه‌های زیر آگهی‌ها استفاده کنید.\n"
+            "📞 تماس: 09127136697\n"
+            "🆔 کانال: @bazaryaranby",
+            parse_mode='Markdown'
+        )
+        return ConversationHandler.END
+    
     user_data_temp[user_id] = {}
     
     welcome_text = (
@@ -51,23 +67,23 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     help_text = (
         "📚 *راهنمای ربات بازاریاران*\n\n"
         "🏷 این ربات برای ثبت آگهی طلا در کانال @bazaryaranby طراحی شده است.\n\n"
+        "👤 *ثبت آگهی:* فقط ادمین\n\n"
         "📋 *مراحل ثبت آگهی:*\n"
         "1️⃣ ارسال عکس طلا\n"
-        "2️⃣ وارد کردن نام (مثلاً: گردنبند قلب)\n"
+        "2️⃣ وارد کردن نام\n"
         "3️⃣ انتخاب عیار (۱۴ تا ۲۴)\n"
-        "4️⃣ وارد کردن وزن به گرم (مثلاً: 5.2)\n"
-        "5️⃣ وارد کردن درصد سود فروشنده (مثلاً: 15)\n"
-        "6️⃣ وارد کردن درصد اجرت ساخت (مثلاً: 10)\n"
+        "4️⃣ وارد کردن وزن به گرم\n"
+        "5️⃣ وارد کردن درصد سود\n"
+        "6️⃣ وارد کردن درصد اجرت ساخت\n"
         "7️⃣ انتخاب وضعیت (نو یا دست دوم)\n\n"
         "💰 *مشاهده قیمت لحظه‌ای:*\n"
-        "بعد از ثبت آگهی، مشتری با دکمه «مشاهده قیمت لحظه‌ای» قیمت را می‌بیند.\n\n"
+        "همه کاربران میتوانند با دکمه «مشاهده قیمت لحظه‌ای» قیمت را ببینند.\n\n"
         "📞 *شماره تماس:* 09127136697\n\n"
         "🆔 کانال: @bazaryaranby\n"
         "🤖 ربات: @BazaryaranBot\n\n"
         "📌 *دستورات:*\n"
-        "/start - ثبت آگهی جدید\n"
+        "/start - شروع\n"
         "/help - راهنما\n"
-        "/cancel - لغو عملیات\n"
         "/about - درباره ما\n"
         "/support - پشتیبانی"
     )
@@ -77,7 +93,7 @@ async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     about_text = (
         "🏢 *بازاریاران*\n\n"
         "✨ اولین ربات تخصصی طلافروشی\n"
-        "📱 ثبت آگهی رایگان در کانال\n"
+        "📱 ثبت آگهی طلا در کانال\n"
         "💰 محاسبه قیمت لحظه‌ای طلا\n"
         "🔗 ارتباط مستقیم خریدار و فروشنده\n\n"
         "📞 تماس: 09127136697\n"
@@ -92,19 +108,24 @@ async def support_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📞 *پشتیبانی بازاریاران*\n\n"
         "📱 تماس: 09127136697\n"
         "🆔 کانال: @bazaryaranby\n"
-        "🤖 ربات: @BazaryaranBot\n\n"
-        "💬 جهت ارتباط با پشتیبانی به آیدی زیر پیام دهید:",
+        "🤖 ربات: @BazaryaranBot",
         parse_mode='Markdown'
     )
 
 async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
+    if not is_admin(user_id):
+        return ConversationHandler.END
+    
     user_data_temp[user_id]['photo_id'] = update.message.photo[-1].file_id
     await update.message.reply_text("📝 نام طلا را وارد کنید (مثلاً: گردنبند قلب):")
     return NAME
 
 async def name_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
+    if not is_admin(user_id):
+        return ConversationHandler.END
+    
     user_data_temp[user_id]['name'] = update.message.text
     keyboard = [
         [InlineKeyboardButton("۱۴ عیار", callback_data="purity_14"),
@@ -120,6 +141,9 @@ async def purity_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     user_id = update.effective_user.id
+    if not is_admin(user_id):
+        return ConversationHandler.END
+    
     purity = int(query.data.split('_')[1])
     user_data_temp[user_id]['purity'] = purity
     await query.edit_message_text(f"✅ عیار انتخابی: {purity}\n\n⚖ وزن طلا را به گرم وارد کنید (مثلاً: 5.2):")
@@ -127,6 +151,9 @@ async def purity_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def weight_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
+    if not is_admin(user_id):
+        return ConversationHandler.END
+    
     try:
         text = fa_to_en(update.message.text)
         weight = float(text)
@@ -141,6 +168,9 @@ async def weight_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def profit_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
+    if not is_admin(user_id):
+        return ConversationHandler.END
+    
     try:
         text = fa_to_en(update.message.text)
         profit = float(text)
@@ -155,6 +185,9 @@ async def profit_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def labor_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
+    if not is_admin(user_id):
+        return ConversationHandler.END
+    
     try:
         text = fa_to_en(update.message.text)
         labor = float(text)
@@ -176,6 +209,9 @@ async def condition_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     user_id = update.effective_user.id
+    if not is_admin(user_id):
+        return ConversationHandler.END
+    
     is_new = query.data == "condition_new"
     user_data_temp[user_id]['is_new'] = is_new
     condition_text = "نو ✨" if is_new else "دست دوم 🔄"
@@ -184,11 +220,20 @@ async def condition_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_data_temp[user_id]['phone'] = phone
     user_data = user_data_temp[user_id]
     
+    # محاسبه قیمت
+    price_info = calculate_price(
+        user_data['weight'],
+        user_data['purity'],
+        user_data['profit_percent'],
+        user_data['labor_percent'],
+        user_data['is_new']
+    )
+    
     ad_id = f"{user_id}_{datetime.now().timestamp()}"
     ad_data = {
         'user_id': user_id,
         **user_data,
-        'price_info': None,
+        'price_info': price_info,
         'sold': False,
         'created_at': datetime.now().isoformat()
     }
@@ -202,40 +247,41 @@ async def condition_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"⚖ وزن: {user_data['weight']} گرم\n"
         f"📦 وضعیت: {condition_text}\n"
         f"━━━━━━━━━━━━━━━━\n"
+        f"💰 قیمت پایه هر گرم: {price_info['base_price_18k']:,.0f} تومان\n"
+        f"💎 قیمت هر گرم: {price_info['gram_price']:,.0f} تومان\n"
+        f"📈 قیمت خام: {price_info['raw_price']:,.0f} تومان\n"
+        f"💹 سود ({user_data['profit_percent']}%): {price_info['profit']:,.0f} تومان\n"
+        f"🔧 اجرت ({user_data['labor_percent']}%): {price_info['labor']:,.0f} تومان\n"
+        f"━━━━━━━━━━━━━━━━\n"
+        f"💫 قیمت نهایی: {price_info['final_price']:,.0f} تومان\n"
+        f"━━━━━━━━━━━━━━━━\n"
         f"📞 تماس: {phone}\n"
         f"━━━━━━━━━━━━━━━━\n"
-        f"🆔 کانال: {CHANNEL_ID}\n"
-        f"\n💰 برای مشاهده قیمت لحظه‌ای، دکمه زیر را بزنید:"
+        f"🆔 کانال: {CHANNEL_ID}"
     )
     
-    # دکمه فروخته شد فقط برای کاربر ثبت‌کننده (و ادمین)
     keyboard = [
-        [InlineKeyboardButton("💰 مشاهده قیمت لحظه‌ای", callback_data=f"price_{ad_id}")],
+        [InlineKeyboardButton("💰 بروزرسانی قیمت", callback_data=f"update_{ad_id}")],
         [InlineKeyboardButton("❌ فروخته شد", callback_data=f"sold_{ad_id}")]
     ]
     
     await query.message.reply_photo(
         photo=user_data['photo_id'],
-        caption=ad_text + "\n\n✅ آگهی شما با موفقیت ثبت شد!",
+        caption=ad_text + "\n\n✅ آگهی با موفقیت ثبت شد!",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
     
-    # ارسال به کانال (بدون دکمه فروخته شد)
+    # ارسال به کانال
     try:
-        channel_keyboard = [
-            [InlineKeyboardButton("💰 مشاهده قیمت لحظه‌ای", callback_data=f"price_{ad_id}")],
-            [InlineKeyboardButton("❌ فروخته شد", callback_data=f"sold_{ad_id}")]
-        ]
-        channel_text = ad_text + "\n\n📱 جهت ثبت آگهی رایگان: @BazaryaranBot"
+        channel_text = ad_text + "\n\n📱 جهت ثبت آگهی: @BazaryaranBot"
         await context.bot.send_photo(
             chat_id=CHANNEL_ID,
             photo=user_data['photo_id'],
             caption=channel_text,
-            reply_markup=InlineKeyboardMarkup(channel_keyboard)
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
     except Exception as e:
         print(f"Channel error: {e}")
-        await query.message.reply_text("⚠️ آگهی ثبت شد اما در کانال قرار نگرفت.")
     
     del user_data_temp[user_id]
     return ConversationHandler.END
@@ -248,15 +294,16 @@ async def ad_button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     user_id = update.effective_user.id
     
-    if not (data.startswith("price_") or data.startswith("sold_")):
+    if not (data.startswith("update_") or data.startswith("sold_")):
         return
+    
+    await query.answer()
     
     parts = data.split('_', 1)
     action = parts[0]
     ad_id = parts[1] if len(parts) > 1 else ""
     
-    if action == "price":
-        await query.answer()
+    if action == "update":
         ad_data = db.get_ad(ad_id)
         if ad_data and not ad_data.get('sold'):
             price_info = calculate_price(
@@ -267,9 +314,12 @@ async def ad_button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ad_data['is_new']
             )
             
+            ad_data['price_info'] = price_info
+            db.update_price(ad_id, price_info)
+            
             condition = "نو ✨" if ad_data['is_new'] else "دست دوم 🔄"
-            price_text = (
-                f"💎 قیمت لحظه‌ای {ad_data['name']}\n"
+            ad_text = (
+                f"🏷 {ad_data['name']}\n"
                 f"━━━━━━━━━━━━━━━━\n"
                 f"📊 عیار: {ad_data['purity']}\n"
                 f"⚖ وزن: {ad_data['weight']} گرم\n"
@@ -281,18 +331,27 @@ async def ad_button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"💹 سود ({ad_data['profit_percent']}%): {price_info['profit']:,.0f} تومان\n"
                 f"🔧 اجرت ({ad_data['labor_percent']}%): {price_info['labor']:,.0f} تومان\n"
                 f"━━━━━━━━━━━━━━━━\n"
-                f"💫 قیمت نهایی: {price_info['final_price']:,.0f} تومان\n\n"
-                f"📞 جهت خرید: {ad_data['phone']}"
+                f"💫 قیمت نهایی: {price_info['final_price']:,.0f} تومان\n"
+                f"━━━━━━━━━━━━━━━━\n"
+                f"📞 تماس: {ad_data['phone']}\n"
+                f"━━━━━━━━━━━━━━━━\n"
+                f"🆔 کانال: {CHANNEL_ID}"
             )
             
-            await query.answer(price_text, show_alert=True)
+            keyboard = [
+                [InlineKeyboardButton("💰 بروزرسانی قیمت", callback_data=f"update_{ad_id}")],
+                [InlineKeyboardButton("❌ فروخته شد", callback_data=f"sold_{ad_id}")]
+            ]
+            
+            await query.edit_message_caption(
+                caption=ad_text + "\n\n🔄 قیمت بروزرسانی شد",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
     
     elif action == "sold":
         ad_data = db.get_ad(ad_id)
         if ad_data:
-            # فقط صاحب آگهی یا ادمین می‌تونه بزنه
-            if user_id == ad_data['user_id'] or user_id in ADMIN_IDS:
-                await query.answer()
+            if user_id == ad_data['user_id'] or is_admin(user_id):
                 db.mark_as_sold(ad_id)
                 original_caption = query.message.caption or ""
                 sold_caption = f"❌ فروخته شد ❌\n\n{original_caption}"
@@ -304,21 +363,18 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id in user_data_temp:
         del user_data_temp[user_id]
-    await update.message.reply_text("❌ عملیات لغو شد.\n/start - ثبت آگهی جدید\n/help - راهنما")
+    await update.message.reply_text("❌ عملیات لغو شد.\n/start - شروع\n/help - راهنما")
     return ConversationHandler.END
 
 def main():
     application = Application.builder().token(BOT_TOKEN).build()
     
-    # دستورات
     application.add_handler(CommandHandler('help', help_command))
     application.add_handler(CommandHandler('about', about_command))
     application.add_handler(CommandHandler('support', support_command))
     
-    # دکمه‌ها
-    application.add_handler(CallbackQueryHandler(ad_button_handler, pattern='^(price_|sold_)'))
+    application.add_handler(CallbackQueryHandler(ad_button_handler, pattern='^(update_|sold_)'))
     
-    # مکالمه
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
         states={
